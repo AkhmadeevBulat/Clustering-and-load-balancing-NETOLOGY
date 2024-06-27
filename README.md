@@ -86,8 +86,8 @@ global
 
 defaults
         log     global
-        mode    http
-        option  httplog
+        mode    tcp
+        option  tcplog
         option  dontlognull
         timeout connect 5000
         timeout client  50000
@@ -121,6 +121,80 @@ backend http_back
 
 ## Задание 2
 
+1. Поднял еще один сервер для Python сервера:
 
+В итоге у меня 3 Python сервера с ip-адресами ```10.20.40.5```, ```10.20.40.8``` и ```10.20.40.6```
+
+А сервер, который отвечает за балансировку с помощью HAProxy, имеет ip-адрес ```10.20.40.9```
+
+2. Конфигурационный файл HAProxy на 4-ом сервере:
+
+```
+global
+        log /dev/log    local0
+        log /dev/log    local1 notice
+        chroot /var/lib/haproxy
+        stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
+        stats timeout 30s
+        user haproxy
+        group haproxy
+        daemon
+
+        # Default SSL material locations
+        ca-base /etc/ssl/certs
+        crt-base /etc/ssl/private
+
+        # See: https://ssl-config.mozilla.org/#server=haproxy&server-version=2.0.3&config=intermediate
+        ssl-default-bind-ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384
+        ssl-default-bind-ciphersuites TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256
+        ssl-default-bind-options ssl-min-ver TLSv1.2 no-tls-tickets
+
+defaults
+        log     global
+        mode    http
+        option  httplog
+        option  dontlognull
+        timeout connect 5000
+        timeout client  50000
+        timeout server  50000
+        errorfile 400 /etc/haproxy/errors/400.http
+        errorfile 403 /etc/haproxy/errors/403.http
+        errorfile 408 /etc/haproxy/errors/408.http
+        errorfile 500 /etc/haproxy/errors/500.http
+        errorfile 502 /etc/haproxy/errors/502.http
+        errorfile 503 /etc/haproxy/errors/503.http
+        errorfile 504 /etc/haproxy/errors/504.http
+
+frontend http_front
+    bind *:80
+    acl is_example_local hdr(host) -i example.local
+    use_backend http_back if is_example_local
+    default_backend default_back
+
+backend http_back
+    balance roundrobin
+    server server1 10.20.40.5:8888 check weight 2
+    server server2 10.20.40.8:8888 check weight 3
+    server server3 10.20.40.6:8888 check weight 4
+
+backend default_back
+    balance roundrobin
+    server server1 10.20.40.5:8888 check
+    server server2 10.20.40.8:8888 check
+    server server3 10.20.40.6:8888 check
+```
+
+3. Добавил DNS адрес на своей машине:
+
+![ФОТО](images/my-dns.png)
+
+4. Балансировка работает:
+
+![ФОТО](images/example-local-3.png) 
+![ФОТО](images/example-local-2.png) 
+![ФОТО](images/example-local-1.png)
+![alt text](images/no-example-local-3.png) 
+![alt text](images/no-example-local-2.png) 
+![alt text](images/no-example-local-1.png)
 
 ---
